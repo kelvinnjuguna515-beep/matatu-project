@@ -1,6 +1,6 @@
 # ==================================================
 # MATATU FARE COLLECTION SYSTEM
-# Version 1.0
+# VERSION 2.0
 # ==================================================
 
 import sqlite3
@@ -8,21 +8,39 @@ from datetime import datetime
 
 
 # ==================================================
-# DATABASE SETUP
+# DATABASE CONNECTION
 # ==================================================
 
 connection = sqlite3.connect("matatu.db")
 cursor = connection.cursor()
 
+
+# ==================================================
+# CREATE DATABASE TABLE
+# ==================================================
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS collections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle TEXT NOT NULL,
+    driver TEXT NOT NULL DEFAULT 'Not recorded',
     date TEXT NOT NULL,
     passengers INTEGER NOT NULL,
     total REAL NOT NULL
 )
 """)
+
+# Upgrade an existing database without deleting records.
+# Add the driver column only if it does not already exist.
+
+cursor.execute("PRAGMA table_info(collections)")
+columns = [column[1] for column in cursor.fetchall()]
+
+if "driver" not in columns:
+    cursor.execute("""
+    ALTER TABLE collections
+    ADD COLUMN driver TEXT NOT NULL DEFAULT 'Not recorded'
+    """)
 
 connection.commit()
 
@@ -33,7 +51,9 @@ connection.commit()
 
 def record_collection():
 
-    print("\n===== RECORD COLLECTION =====")
+    print("\n========================================")
+    print("             RECORD COLLECTION")
+    print("========================================")
 
     vehicle = input("Enter vehicle registration: ").strip().upper()
 
@@ -41,11 +61,17 @@ def record_collection():
         print("Vehicle registration cannot be empty.")
         return
 
+    driver = input("Enter driver's name: ").strip()
+
+    if not driver:
+        print("Driver's name cannot be empty.")
+        return
+
     try:
         passengers = int(input("Enter number of passengers: "))
 
         if passengers <= 0:
-            print("Number of passengers must be greater than zero.")
+            print("Passengers must be greater than zero.")
             return
 
         fares = []
@@ -53,7 +79,9 @@ def record_collection():
         for number in range(1, passengers + 1):
 
             fare = float(
-                input(f"Enter fare for passenger {number} (KSh): ")
+                input(
+                    f"Enter fare for passenger {number} (KSh): "
+                )
             )
 
             if fare <= 0:
@@ -67,20 +95,24 @@ def record_collection():
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         cursor.execute("""
-        INSERT INTO collections (vehicle, date, passengers, total)
-        VALUES (?, ?, ?, ?)
-        """, (vehicle, date, passengers, total))
+        INSERT INTO collections
+        (vehicle, driver, date, passengers, total)
+        VALUES (?, ?, ?, ?, ?)
+        """, (vehicle, driver, date, passengers, total))
 
         connection.commit()
 
         print("\nCollection saved successfully!")
+        print("----------------------------------------")
         print("Vehicle:", vehicle)
+        print("Driver:", driver)
         print("Date:", date)
         print("Passengers:", passengers)
         print(f"Total collected: KSh {total:.2f}")
+        print("----------------------------------------")
 
     except ValueError:
-        print("Invalid input. Please enter numbers correctly.")
+        print("Invalid input. Enter valid numbers.")
 
 
 # ==================================================
@@ -89,10 +121,12 @@ def record_collection():
 
 def view_collections():
 
-    print("\n===== COLLECTION HISTORY =====")
+    print("\n========================================")
+    print("           COLLECTION HISTORY")
+    print("========================================")
 
     cursor.execute("""
-    SELECT id, vehicle, date, passengers, total
+    SELECT id, vehicle, driver, date, passengers, total
     FROM collections
     ORDER BY id DESC
     """)
@@ -105,12 +139,15 @@ def view_collections():
 
     for record in records:
 
-        print("-" * 40)
+        print("\n----------------------------------------")
         print("Record ID:", record[0])
         print("Vehicle:", record[1])
-        print("Date:", record[2])
-        print("Passengers:", record[3])
-        print(f"Total: KSh {record[4]:.2f}")
+        print("Driver:", record[2])
+        print("Date:", record[3])
+        print("Passengers:", record[4])
+        print(f"Total: KSh {record[5]:.2f}")
+
+    print("----------------------------------------")
 
 
 # ==================================================
@@ -124,9 +161,9 @@ def daily_report():
     cursor.execute("""
     SELECT
         vehicle,
-        COUNT(*) AS collections,
-        SUM(passengers) AS total_passengers,
-        SUM(total) AS total_collected
+        COUNT(*),
+        SUM(passengers),
+        SUM(total)
     FROM collections
     WHERE date(date) = ?
     GROUP BY vehicle
@@ -136,7 +173,7 @@ def daily_report():
     records = cursor.fetchall()
 
     print("\n========================================")
-    print("          DAILY COLLECTION REPORT")
+    print("        DAILY COLLECTION REPORT")
     print("========================================")
     print("Date:", today)
 
@@ -145,6 +182,8 @@ def daily_report():
         return
 
     fleet_total = 0
+    fleet_passengers = 0
+    fleet_collections = 0
 
     for record in records:
 
@@ -154,14 +193,20 @@ def daily_report():
         total = record[3]
 
         print("\nVehicle:", vehicle)
-        print("Collections:", collections)
+        print("Number of collections:", collections)
         print("Total passengers:", passengers)
         print(f"Total collected: KSh {total:.2f}")
 
         fleet_total += total
+        fleet_passengers += passengers
+        fleet_collections += collections
 
     print("\n========================================")
-    print(f"TOTAL FLEET COLLECTION: KSh {fleet_total:.2f}")
+    print("           FLEET SUMMARY")
+    print("========================================")
+    print("Total collections:", fleet_collections)
+    print("Total passengers:", fleet_passengers)
+    print(f"TOTAL COLLECTED: KSh {fleet_total:.2f}")
     print("========================================")
 
 
@@ -174,7 +219,8 @@ try:
     while True:
 
         print("\n========================================")
-        print("     MATATU FARE COLLECTION SYSTEM")
+        print("       MATATU FARE COLLECTION SYSTEM")
+        print("                 VERSION 2.0")
         print("========================================")
 
         print("1. Record a Collection")
